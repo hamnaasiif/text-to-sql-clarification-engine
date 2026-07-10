@@ -1,0 +1,122 @@
+[
+    {
+        "id": "q1",
+        "question": "List all products in the Electronics category",
+        "is_ambiguous": false,
+        "ambiguity_type": null
+    },
+    {
+        "id": "q2",
+        "question": "Show me the best customer",
+        "is_ambiguous": true,
+        "ambiguity_type": "undefined_metric"
+    },
+    {
+        "id": "q3",
+        "question": "What is our total revenue?",
+        "is_ambiguous": true,
+        "ambiguity_type": "undefined_filter"
+    },
+    {
+        "id": "q4",
+        "question": "Who signed up in 2024?",
+        "is_ambiguous": false,
+        "ambiguity_type": null
+    },
+    {
+        "id": "q5",
+        "question": "Show me recent orders",
+        "is_ambiguous": true,
+        "ambiguity_type": "undefined_time_range"
+    },
+    {
+        "id": "q6",
+        "question": "What is the price and stock quantity of product ID 5?",
+        "is_ambiguous": false,
+        "ambiguity_type": null
+    },
+    {
+        "id": "q7",
+        "question": "Show all orders placed between 2026-01-01 and 2026-03-31",
+        "is_ambiguous": false,
+        "ambiguity_type": null
+    },
+    {
+        "id": "q8",
+        "question": "List customer name and email for customer_id 10",
+        "is_ambiguous": false,
+        "ambiguity_type": null
+    },
+    {
+        "id": "q9",
+        "question": "Show all completed payments made using Credit Card",
+        "is_ambiguous": false,
+        "ambiguity_type": null
+    },
+    {
+        "id": "q10",
+        "question": "What are our top selling products?",
+        "is_ambiguous": true,
+        "ambiguity_type": "undefined_metric"
+    },
+    {
+        "id": "q11",
+        "question": "Who is our most active customer?",
+        "is_ambiguous": true,
+        "ambiguity_type": "undefined_metric"
+    },
+    {
+        "id": "q12",
+        "question": "Which product category is performing the best?",
+        "is_ambiguous": true,
+        "ambiguity_type": "undefined_metric"
+    },
+    {
+        "id": "q13",
+        "question": "How many orders were placed lately?",
+        "is_ambiguous": true,
+        "ambiguity_type": "undefined_time_range"
+    },
+    {
+        "id": "q14",
+        "question": "What was our revenue in the last period?",
+        "is_ambiguous": true,
+        "ambiguity_type": "undefined_time_range"
+    },
+    {
+        "id": "q15",
+        "question": "Show me orders from recently joined customers",
+        "is_ambiguous": true,
+        "ambiguity_type": "undefined_time_range"
+    },
+    {
+        "id": "q16",
+        "question": "How many total orders do we have?",
+        "is_ambiguous": true,
+        "ambiguity_type": "undefined_filter"
+    },
+    {
+        "id": "q17",
+        "question": "List all active products in our store",
+        "is_ambiguous": true,
+        "ambiguity_type": "undefined_filter"
+    },
+    {
+        "id": "q18",
+        "question": "Show me all high value transactions",
+        "is_ambiguous": true,
+        "ambiguity_type": "undefined_filter"
+    },
+    {
+        "id": "q19",
+        "question": "Who was the best customer last year?",
+        "is_ambiguous": true,
+        "ambiguity_type": "multiple_ambiguities"
+    },
+    {
+        "id": "q20",
+        "question": "Show me top selling products from recent sales",
+        "is_ambiguous": true,
+        "ambiguity_type": "multiple_ambiguities"
+    }
+]
