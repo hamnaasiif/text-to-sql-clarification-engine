@@ -1,0 +1,172 @@
+/* ── Message rows ─────────────────────────────────── */
+
+.msg-row {
+  display: flex;
+  padding: 0 1.25rem;
+  margin-bottom: 0.75rem;
+  animation: msg-slide-in 0.35s ease-out;
+}
+
+.msg-row--user {
+  justify-content: flex-end;
+}
+
+.msg-row--assistant,
+.msg-row--error {
+  justify-content: flex-start;
+}
+
+@keyframes msg-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Bubbles ─────────────────────────────────────── */
+
+.msg-bubble {
+  max-width: 80%;
+  border-radius: 1.125rem;
+  padding: 0.875rem 1.125rem;
+  line-height: 1.55;
+  word-wrap: break-word;
+}
+
+.msg-bubble--user {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #fff;
+  border-bottom-right-radius: 0.25rem;
+}
+
+.msg-bubble--assistant {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  border-bottom-left-radius: 0.25rem;
+}
+
+.msg-bubble--error {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border-bottom-left-radius: 0.25rem;
+}
+
+.msg-text {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+/* ── SQL collapsible ─────────────────────────────── */
+
+.msg-sql {
+  margin-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 0.625rem;
+}
+
+.msg-sql-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.msg-sql-toggle:hover {
+  color: var(--accent-light);
+}
+
+.msg-sql-chevron {
+  transition: transform 0.25s ease;
+}
+
+.msg-sql-chevron--open {
+  transform: rotate(90deg);
+}
+
+.msg-sql-code {
+  margin: 0.625rem 0 0;
+  padding: 0.875rem 1rem;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.625rem;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: #c4b5fd;
+  animation: msg-slide-in 0.25s ease-out;
+}
+
+/* ── Option pills ────────────────────────────────── */
+
+.msg-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.875rem;
+}
+
+.msg-option-btn {
+  background: transparent;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: var(--accent-light);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 0.5rem 0.875rem;
+  border-radius: 2rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.msg-option-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: var(--accent);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.msg-option-btn:active {
+  transform: translateY(0);
+  background: rgba(99, 102, 241, 0.25);
+}
+
+/* ── Error start-over ────────────────────────────── */
+
+.msg-start-over {
+  display: inline-block;
+  margin-top: 0.75rem;
+  background: none;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 0.4rem 0.875rem;
+  border-radius: 2rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.msg-start-over:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.5);
+}
