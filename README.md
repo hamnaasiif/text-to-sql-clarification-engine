@@ -1,9 +1,11 @@
 # Text-to-SQL with an AI Clarification Engine
 
-A natural-language-to-SQL system that **detects when a question is ambiguous and asks a clarifying question before generating SQL** — instead of silently guessing user intent like a typical text-to-SQL tool.
+A natural-language-to-SQL system that **detects when a question is ambiguous and asks a clarifying question before generating SQL** — instead of silently guessing user intent like a typical text-to-SQL tool. Includes a full-stack demo: FastAPI backend, React chat frontend, and PostgreSQL, deployed for free.
 
 > **Typical text-to-SQL:** *"Show me the best customer"* → silently assumes "best" means highest revenue, runs the query, never mentions the assumption.
 > **This system:** *"Show me the best customer"* → asks *"Do you mean highest revenue, most orders, or highest average order value?"* → generates SQL only once intent is clear.
+
+**Live demo:** [textsql-frontend-kappa.vercel.app](https://textsql-frontend-kappa.vercel.app)
 
 ---
 
@@ -15,8 +17,10 @@ A natural-language-to-SQL system that **detects when a question is ambiguous and
 - [Project Structure](#project-structure)
 - [Setup & Installation](#setup--installation)
 - [Usage](#usage)
+- [API Reference](#api-reference)
 - [Testing](#testing)
 - [Evaluation](#evaluation)
+- [Deployment](#deployment)
 - [Known Limitations & Future Work](#known-limitations--future-work)
 
 ---
@@ -33,8 +37,8 @@ The project includes a full evaluation comparing a **baseline** (question → SQ
 User Question
      │
      ▼
-Schema Understanding (live introspection of the Postgres schema)
-     │
+Schema Understanding (live introspection of the Postgres schema,
+     │                 including sample values for filterable columns)
      ▼
 Ambiguity Engine ── is the question ambiguous, and in how many
      │                distinct ways (metric? time range? filter?)
@@ -42,7 +46,7 @@ Ambiguity Engine ── is the question ambiguous, and in how many
  ┌───┴────┐
  │        │
 CLEAR   AMBIGUOUS ── ask one clarifying question per ambiguous
- │        │           aspect, collect all answers
+ │        │           aspect, one at a time, tracked in a session
  │        ▼
  │   Resolved Intent (original question + all clarifications merged)
  │        │
@@ -62,60 +66,84 @@ Natural Language Response
 
 Each stage is a separate, single-responsibility component (`app/services/`), not one giant prompt — this made it possible to test, evaluate, and fix each stage independently (see the bug list under [Evaluation](#evaluation)).
 
+The pipeline is exposed two ways: an interactive CLI (`main.py`) for quick local testing, and a stateless FastAPI web API (`app/api/routes.py`) backing the React frontend, with conversation state persisted in Postgres so a multi-round clarification survives across HTTP requests (and server restarts).
+
 ### Key design decisions
 
 - **Multi-dimensional ambiguity detection.** A single question can be ambiguous in more than one independent way (e.g. *"who made the most purchases last year"* is ambiguous in both *metric* and *time range*). The ambiguity engine returns a list of distinct `AmbiguityDimension` objects, each resolved with its own clarifying question, instead of merging everything into one confusing prompt.
 - **Defense in depth on SQL safety.** The LLM is instructed to generate `SELECT`-only queries, but that instruction is never trusted alone — every query is parsed with `sqlglot` and rejected before execution if it isn't a `SELECT` statement, regardless of formatting or phrasing.
 - **Schema includes sample values, not just column types.** For low-cardinality string columns (e.g. `order_status`), the schema sent to the LLM includes the actual distinct values stored (`['completed', 'pending', 'cancelled']`). Without this, the LLM guesses casing/spelling for filters (`'Completed'` vs. `'completed'`) and silently returns wrong results — this was a real bug found during evaluation.
 - **Deterministic tie-breaking.** Any `ORDER BY ... LIMIT` query includes a secondary sort key (primary key) so that ranking queries return the same result set on every run, even when values tie — also a bug found during evaluation, not designed in from the start.
+- **Session state in Postgres, not in-memory.** The web API is stateless per request, so an in-progress multi-round clarification needs to persist somewhere between a `/ask` call and the follow-up `/answer` calls. Postgres (a `conversation_sessions` table with JSONB columns) was chosen over adding Redis, to avoid a new external dependency for what a free-tier database can already do.
 
 ## Tech Stack
 
 | Layer | Choice |
 |---|---|
-| Database | PostgreSQL |
+| Database | PostgreSQL ([Neon](https://neon.tech) — free serverless Postgres) |
 | LLM provider | [Groq](https://console.groq.com) (free tier) — `openai/gpt-oss-120b` |
+| Backend API | FastAPI |
+| Frontend | React (Vite) |
 | Structured output validation | Pydantic |
 | SQL parsing/safety | `sqlglot` |
 | DB driver | `psycopg2` |
-| Language | Python |
+| Hosting | Vercel — both backend (Python serverless functions) and frontend (static site), free tier |
 
-Groq was chosen specifically to keep the project's running cost at $0 — see [Setup](#setup--installation).
+Every service in this stack was deliberately chosen to keep running cost at $0 — see [Setup](#setup--installation) and [Deployment](#deployment).
 
 ## Project Structure
 
 ```
 text-to-sql-clarification-engine/
+├── api/
+│   └── index.py                   # Vercel serverless entry point (re-exports the FastAPI app)
+├── vercel.json                    # Vercel build/routing config for the backend
 ├── app/
+│   ├── api/
+│   │   └── routes.py             # FastAPI app: /ask, /answer, /dataset-summary
 │   ├── database/
-│   │   ├── schema.sql          # 5-table schema (DDL)
-│   │   ├── seed_data.sql       # base seed data
-│   │   └── seed_v2.py          # additional data engineered to create
-│   │                           # genuine ambiguity (revenue vs. order-count
-│   │                           # conflicts, mixed categories, cancelled/
-│   │                           # pending orders)
+│   │   ├── schema.sql             # 5-table core schema (DDL)
+│   │   ├── seed_data.sql          # base seed data
+│   │   ├── seed_v2.py             # additional data engineered to create
+│   │   │                         # genuine ambiguity (revenue vs. order-count
+│   │   │                         # conflicts, mixed categories, cancelled/
+│   │   │                         # pending orders)
+│   │   └── sessions_schema.sql    # conversation_sessions table (JSONB)
 │   ├── models/
-│   │   ├── ambiguity.py        # AmbiguityDimension, AmbiguityResult
-│   │   └── sql.py              # SQLResult
+│   │   ├── ambiguity.py           # AmbiguityDimension, AmbiguityResult
+│   │   └── sql.py                 # SQLResult
 │   └── services/
-│       ├── schema_service.py       # live schema introspection
-│       ├── ambiguity_service.py    # ambiguity detection
-│       ├── conversation_service.py # resolves clarifications into intent
-│       ├── sql_generator.py        # SQL generation + error-driven repair
-│       ├── sql_validator.py        # SELECT-only enforcement (sqlglot)
-│       ├── query_executor.py       # safe execution
-│       └── response_generator.py   # natural-language final answer
+│       ├── schema_service.py         # live schema introspection + sample values
+│       ├── ambiguity_service.py      # ambiguity detection
+│       ├── conversation_service.py   # resolves clarifications into intent
+│       ├── session_service.py        # Postgres-backed session state (web API)
+│       ├── sql_generator.py          # SQL generation + error-driven repair
+│       ├── sql_validator.py          # SELECT-only enforcement (sqlglot)
+│       ├── query_executor.py         # safe execution
+│       ├── response_generator.py     # natural-language final answer
+│       └── dataset_summary_service.py # live counts/samples for the frontend
+├── frontend/                      # React (Vite) chat interface
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── ChatMessage.jsx/.css
+│   │   │   ├── ChatInput.jsx/.css
+│   │   │   ├── TypingIndicator.jsx/.css
+│   │   │   └── DataInfoPanel.jsx/.css   # "What's in this data?" panel
+│   │   ├── api.js                 # fetch wrapper for /ask, /answer, /dataset-summary
+│   │   └── App.jsx                # chat state machine
+│   └── .env.example                # VITE_API_URL
 ├── evaluation/
-│   ├── dataset.json             # 20 labeled questions (ambiguous/clear)
-│   ├── evaluate_ambiguity.py    # accuracy / false-positive / false-negative
-│   └── baseline.py              # no-clarification baseline, for comparison
+│   ├── dataset.json               # 20 labeled questions (ambiguous/clear)
+│   ├── evaluate_ambiguity.py      # accuracy / false-positive / false-negative
+│   └── baseline.py                # no-clarification baseline, for comparison
 ├── tests/
 │   ├── test_conversation_service.py
-│   ├── test_error_recovery.py   # mocked failure + retry-loop tests
-│   └── test_all_scenarios.py    # 8 end-to-end scenario tests
-├── main.py                      # interactive CLI entry point
+│   ├── test_error_recovery.py     # mocked failure + retry-loop tests
+│   └── test_all_scenarios.py      # 8 end-to-end scenario tests
+├── main.py                        # interactive CLI entry point
+├── deployment.md                  # step-by-step Render/Vercel/Neon guide
 ├── requirements.txt
-└── .env                         # not committed — see Setup
+└── .env                           # not committed — see Setup
 ```
 
 ## Setup & Installation
@@ -123,34 +151,23 @@ text-to-sql-clarification-engine/
 ### Prerequisites
 
 - Python 3.10+
-- PostgreSQL installed and running locally
+- Node.js 18+ (for the frontend)
+- PostgreSQL installed and running locally (or a free [Neon](https://neon.tech) database)
 
 ### 1. Clone and create a virtual environment
 
 ```bash
-git clone <this-repo-url>
+git clone https://github.com/hamnaasiif/text-to-sql-clarification-engine.git
 cd text-to-sql-clarification-engine
 python -m venv venv
 venv\Scripts\activate        # Windows
 # source venv/bin/activate   # macOS/Linux
 ```
 
-### 2. Install dependencies
+### 2. Install backend dependencies
 
 ```bash
 pip install -r requirements.txt
-```
-
-`requirements.txt`:
-```
-fastapi
-uvicorn[standard]
-psycopg2-binary
-sqlalchemy
-pydantic
-python-dotenv
-groq
-sqlglot
 ```
 
 ### 3. Create the database
@@ -159,6 +176,7 @@ sqlglot
 psql -U postgres -c "CREATE DATABASE textsql_db;"
 psql -U postgres -d textsql_db -f app/database/schema.sql
 psql -U postgres -d textsql_db -f app/database/seed_data.sql
+psql -U postgres -d textsql_db -f app/database/sessions_schema.sql
 python app/database/seed_v2.py    # run exactly once — not idempotent
 ```
 
@@ -177,9 +195,30 @@ DATABASE_URL=postgresql://postgres:<your_password>@localhost:5432/textsql_db
 GROQ_API_KEY=<your_groq_key>
 ```
 
+### 6. Install frontend dependencies
+
+```bash
+cd frontend
+npm install
+cp .env.example .env   # defaults to http://127.0.0.1:8000, fine for local dev
+```
+
 ## Usage
 
-Run the interactive pipeline:
+### Option A — Web interface (recommended)
+
+```bash
+# terminal 1 — backend
+uvicorn app.api.routes:app --reload
+
+# terminal 2 — frontend
+cd frontend
+npm run dev
+```
+
+Open `http://localhost:5173`, ask a question, and answer any clarifying questions by clicking an option or typing a free-text answer.
+
+### Option B — CLI
 
 ```bash
 python main.py
@@ -215,6 +254,16 @@ LIMIT 5;
 Answer: Your top-selling items by quantity are T-Shirt (6 units sold),
 Mouse (2), Jeans (2), Laptop (1) and Mobile (1).
 ```
+
+## API Reference
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/ask` | POST | Start a new question. Body: `{ "question": "..." }`. Returns either a `clarification_needed` response (with `session_id`, `aspect`, `question`, `options`) or an `answered` response (with `sql`, `answer`). |
+| `/answer` | POST | Answer the current clarification. Body: `{ "session_id": "...", "answer": "..." }`. Returns the next `clarification_needed` step or a final `answered` response — the same shape as `/ask`. |
+| `/dataset-summary` | GET | Returns live counts and samples (customers, products, orders by status, payments) used by the frontend's "What's in this data?" panel. |
+
+Interactive docs are auto-generated by FastAPI at `/docs` on the running backend.
 
 ## Testing
 
@@ -266,33 +315,27 @@ This single test exposed three separate silently-resolved ambiguities in the bas
 
 **Takeaway:** the risk with an un-clarified text-to-SQL system isn't only "wrong answers on hard questions" — it can return genuinely different results across identical runs of the same question, with no signal to the user that an assumption was ever made. Making ambiguity explicit trades a small amount of interaction friction for correctness and reproducibility.
 
+## Deployment
+
+Live at: **[textsql-frontend-kappa.vercel.app](https://textsql-frontend-kappa.vercel.app)**
+
+Deployed entirely on free tiers, no credit card required anywhere in the stack:
+
+- **Database:** [Neon](https://neon.tech) (serverless Postgres)
+- **Backend:** [Vercel](https://vercel.com) — deployed as a Python serverless function (`api/index.py` re-exports the existing FastAPI app; `vercel.json` routes all paths to it). `DATABASE_URL` and `GROQ_API_KEY` are set as Vercel environment variables. This is a separate Vercel project from the frontend, with its Root Directory set to the repository root.
+- **Frontend:** [Vercel](https://vercel.com) (`frontend/` as the project root, `VITE_API_URL` pointing to the deployed backend function's URL)
+
+Full step-by-step instructions are in [`deployment.md`](./deployment.md).
+
+**Why Vercel for the backend instead of a traditional host:** Render asks for card verification and Railway's permanent free tier was discontinued (usage-based credits that run out). The backend was already fully stateless — conversation state lives in Postgres, not in memory — which is exactly what a serverless function needs, so moving it to Vercel required no logic changes, only a thin entry point and routing config.
+
+**Known trade-off:** Vercel's Hobby plan limits each serverless function invocation to 10 seconds. The pipeline normally finishes well within that (Groq is fast), but if the error-recovery retry loop fires multiple sequential LLM calls within one request, it could in theory approach that limit. Acceptable for a free-tier demo, not something a production deployment should rely on.
+
 ## Known Limitations & Future Work
 
-- **Conversation state is in-memory only** — fine for a single CLI session, would need persistence (DB/Redis) for a multi-user API.
-- **LLM ambiguity detection is not perfectly consistent** — the same question can occasionally return a different number/wording of ambiguity dimensions across runs; a production version should sample multiple times or cache resolved intents per question pattern.
-- **Seed scripts are not idempotent** — `seed_v2.py` must be run exactly once against a fresh database, or it duplicates rows.
+- **Single fixed dataset.** This demo runs against one shared database — every visitor sees the same seeded e-commerce data. Supporting user-uploaded data would require per-user database isolation and is out of scope for this demo.
+- **LLM ambiguity detection is not perfectly consistent.** The same question can occasionally return a different number/wording of ambiguity dimensions across runs; a production version should sample multiple times or cache resolved intents per question pattern.
+- **`conversation_sessions` has no cleanup.** Every session is persisted permanently — fine for a demo, but a production version would need a TTL or scheduled cleanup job.
+- **Seed scripts are not idempotent.** `seed_v2.py` must be run exactly once against a fresh database, or it duplicates rows.
 - **Schema sample-value injection only covers low-cardinality columns** (≤10 distinct values) — free-text columns (names, emails) are intentionally excluded, but this means filters on other high-cardinality text fields could still hit similar casing issues.
-- **Evaluation dataset is small (20 questions) and self-authored** — a stronger evaluation would include adversarial/edge-case questions written without knowledge of the prompt design, and multiple runs per question to measure consistency, not just single-shot accuracy.
-- **No API layer yet** — currently a CLI (`main.py`); wrapping the pipeline in FastAPI would make it usable from a frontend.
-### Phase 9 — API Layer, Step 1 & 2
-- Built minimal FastAPI app (app/api/routes.py) with a POST /ask
-  endpoint reusing check_ambiguity()
-- Chose Postgres over Redis for session state (avoids adding a new
-  external service) -- added conversation_sessions table using
-  JSONB columns for ambiguities/resolutions
-- Built session_service.py (create_session, get_session,
-  add_resolution) using psycopg2.extras.Json for JSONB read/write
-- Tested directly: session created, fetched, and resolution appended
-  correctly, current_index incrementing as expected
-  ### Phase 9 — API Layer ✅
-- Built FastAPI app with session-based multi-turn clarification flow:
-  POST /ask (starts flow, returns first ambiguity or final answer)
-  and POST /answer (resolves current ambiguity, returns next one or
-  final answer)
-- Session state persisted in Postgres (conversation_sessions table,
-  JSONB columns) instead of in-memory, so state survives server
-  restarts
-- Tested full multi-turn flow via /docs: "Show me the best customer"
-  -> metric clarification -> time_range clarification -> final SQL
-  + correct natural-language answer (Ahmed Khan, $1300)
-  This demo runs against a single fixed dataset. Supporting user-uploaded data would require per-user database isolation and is out of scope for this demo.
+- **Evaluation dataset is small (20 questions) and self-authored.** A stronger evaluation would include adversarial/edge-case questions written without knowledge of the prompt design, and multiple runs per question to measure consistency, not just single-shot accuracy.
