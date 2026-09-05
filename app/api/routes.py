@@ -14,10 +14,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        # TODO: add production frontend URL here (e.g. "https://your-app.vercel.app")
-    ],  
+    allow_origins=["http://localhost:5173", "https://textsql-frontend-kappa.vercel.app"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -112,4 +109,4 @@ def answer(request: AnswerRequest):
 
 @app.get("/dataset-summary")
 def dataset_summary():
-    return get_dataset_summary()
+    return get_dataset_summary()
